@@ -5,10 +5,14 @@ description = "A beautiful description."
 authors = [
   {name = "reinder.vosdewael@childmind.org", email = "reinder.vosdewael@childmind.org"}
 ]
-license = ""
+license = "LGPL-2.1"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "opik>=1.5.0",
+    "pydantic>=2.10.6",
+    "pydantic-settings>=2.8.0",
+]
 
 [dependency-groups]
 dev = [
@@ -34,8 +38,11 @@ src = ["src"]
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["ANN", "D", "E", "F", "I"]
-ignore = []
+select = ["ALL"]
+ignore = [
+    "COM812", # can conflict with formatter.
+    "ISC001" # can conflict with formatter.
+]
 fixable = ["ALL"]
 unfixable = []
 

@@ -1,0 +1,3 @@
+from mirror_eval.experiments.opik_capabilities import custom_metric
+
+custom_metric.run_custom_metric_experiment()
