@@ -2,7 +2,7 @@
 
 import pytest
 
-from app_name import algorithms
+from mirror_eval import algorithms
 
 
 def test_fibonacci_success_0() -> None:
