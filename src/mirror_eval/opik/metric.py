@@ -136,7 +136,17 @@ class RegexMetric(base_metric.BaseMetric):
             track: Whether to track the metric. Defaults to True.
         """
         super().__init__(name=name, track=track)
-        self._regex = re.compile(regex)
+        self._pattern = re.compile(regex)
+        self._pattern_tracked = False
+
+    @opik.track()
+    def _track_instruction(self, _regex: str) -> None:
+        """Workaround to insert the regex into the tracking system.
+
+        Args:
+            _regex: The instructions to track.
+        """
+        self._pattern_tracked = True
 
     def score(
         self,
@@ -154,7 +164,10 @@ class RegexMetric(base_metric.BaseMetric):
         Returns:
             A ScoreResult with 1 if a match was found, 0 otherwise.
         """
-        match = self._regex.match(output)
+        if not self._pattern_tracked:
+            self._track_instruction(self._pattern.pattern)
+
+        match = self._pattern.match(output)
         return score_result.ScoreResult(
             name=self.name,
             value=float(bool(match)),
