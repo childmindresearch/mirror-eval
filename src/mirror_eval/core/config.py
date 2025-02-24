@@ -2,6 +2,7 @@
 
 import functools
 import logging
+from pathlib import Path
 
 import pydantic
 import pydantic_settings
@@ -14,6 +15,11 @@ class Settings(pydantic_settings.BaseSettings):
     OPIK_WORKSPACE: str | None = pydantic.Field(None)
 
     LOGGER_VERBOSITY: int = logging.INFO
+
+    model_config = pydantic_settings.SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
 
 
 @functools.lru_cache
