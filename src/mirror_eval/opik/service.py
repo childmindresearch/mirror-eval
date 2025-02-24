@@ -23,7 +23,7 @@ def get_client(api_key: str | None = None, workspace: str | None = None) -> opik
     workspace = workspace or settings.OPIK_WORKSPACE
 
     if not api_key or not workspace:
-        msg = "Opik API key and workspace must be set"
+        msg = "Opik API key and workspace must be set."
         raise OSError(msg)
 
     opik.configure(api_key, workspace)
