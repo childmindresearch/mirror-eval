@@ -1,6 +1,7 @@
 """Custom metrics for OPIK experiments."""
 
 import json
+import re
 from typing import Any
 
 import opik
@@ -68,7 +69,7 @@ class QueryMetric(base_metric.BaseMetric):
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
-            score_result.ScoreResult: A ScoreResult object with a random value.
+            A ScoreResult object, 1 if the instruction returns True, 0 otherwise.
         """
         if not self._instruction_tracked:
             self._track_instruction(self._instruction)
@@ -95,7 +96,7 @@ class QueryMetric(base_metric.BaseMetric):
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
-            score_result.ScoreResult: A ScoreResult object with a random value.
+            A ScoreResult object, 1 if the instruction returns True, 0 otherwise.
         """
         if not self._instruction_tracked:
             self._track_instruction(self._instruction)
@@ -114,4 +115,47 @@ class QueryMetric(base_metric.BaseMetric):
         return score_result.ScoreResult(
             name=self.name,
             value=float(score),
+        )
+
+
+class RegexMetric(base_metric.BaseMetric):
+    """A boolean metric on whether the output adheres to a regular expression."""
+
+    def __init__(
+        self,
+        regex: str,
+        name: str = "Regular Expression",
+        *,
+        track: bool = True,
+    ) -> None:
+        """Initialize the query metric.
+
+        Args:
+            regex: The regular expression to evaluate.
+            name: The name of the metric.
+            track: Whether to track the metric. Defaults to True.
+        """
+        super().__init__(name=name, track=track)
+        self._regex = re.compile(regex)
+
+    def score(
+        self,
+        input: str,  # noqa: A002, ARG002
+        output: str,
+        **_ignored_kwargs: Any,  # noqa: ANN401
+    ) -> score_result.ScoreResult:
+        """Calculate the score for the given input and output.
+
+        Args:
+            input: The original input/question.
+            output: The LLM's output to evaluate.
+            **_ignored_kwargs: Additional keyword arguments that are ignored.
+
+        Returns:
+            A ScoreResult with 1 if a match was found, 0 otherwise.
+        """
+        match = self._regex.match(output)
+        return score_result.ScoreResult(
+            name=self.name,
+            value=float(bool(match)),
         )
