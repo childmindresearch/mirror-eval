@@ -3,6 +3,7 @@
 import json
 from typing import Any
 
+import opik
 import pydantic
 from opik.evaluation.metrics import base_metric, score_result
 from opik.evaluation.models import base_model, models_factory
@@ -42,6 +43,16 @@ class QueryMetric(base_metric.BaseMetric):
             self._model = model
         else:
             self._model = models_factory.get(model_name=model)
+        self._instruction_tracked = False
+
+    @opik.track()
+    def _track_instruction(self, _instruction: str) -> None:
+        """Workaround to insert the instruction into the tracking system.
+
+        Args:
+            _instruction: The instructions to track.
+        """
+        self._instruction_tracked = True
 
     def score(
         self,
@@ -59,6 +70,9 @@ class QueryMetric(base_metric.BaseMetric):
         Returns:
             score_result.ScoreResult: A ScoreResult object with a random value.
         """
+        if not self._instruction_tracked:
+            self._track_instruction(self._instruction)
+
         llm_query = template.query_base_prompt.format(
             instruction=self._instruction, input=input, output=output
         )
@@ -83,6 +97,9 @@ class QueryMetric(base_metric.BaseMetric):
         Returns:
             score_result.ScoreResult: A ScoreResult object with a random value.
         """
+        if not self._instruction_tracked:
+            self._track_instruction(self._instruction)
+
         llm_query = template.query_base_prompt.format(
             instruction=self._instruction, input=input, output=output
         )
