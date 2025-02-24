@@ -97,6 +97,9 @@ class QueryMetric(base_metric.BaseMetric):
         Returns:
             score_result.ScoreResult: A ScoreResult object with a random value.
         """
+        if not self._instruction_tracked:
+            self._track_instruction(self._instruction)
+
         llm_query = template.query_base_prompt.format(
             instruction=self._instruction, input=input, output=output
         )
