@@ -1,13 +1,13 @@
 """Tests for the opik.service module."""
 
+
 import pytest
-from typing import Callable
 
 from mirror_eval.core import config
 from mirror_eval.opik import service
 
 
-def test_get_client_missing_arg(monkeypatch) -> None:
+def test_get_client_missing_arg(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests get_client with a missing argument results in OSError."""
     # Patch the get_settings function to return blank settings
     monkeypatch.setattr(

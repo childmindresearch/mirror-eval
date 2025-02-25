@@ -2,7 +2,6 @@
 
 import functools
 import logging
-from pathlib import Path
 
 import pydantic
 import pydantic_settings

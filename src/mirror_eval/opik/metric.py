@@ -9,11 +9,10 @@ import pydantic
 from opik.evaluation.metrics import base_metric, score_result
 from opik.evaluation.models import base_model, models_factory
 
-from mirror_eval.opik import template
 from mirror_eval.core.embedder import (
     Embedder,
-    OllamaEmbedder,
 )
+from mirror_eval.opik import template
 
 
 class QueryResponse(pydantic.BaseModel):
@@ -196,7 +195,7 @@ class EmbeddingMetric(base_metric.BaseMetric):
         self,
         first_response: str,
         second_response: str,
-        **_ignored_kwargs: Any,
+        **_ignored_kwargs: dict[str, object],
     ) -> score_result.ScoreResult:
         """Calculate the score for the given input and output.
 

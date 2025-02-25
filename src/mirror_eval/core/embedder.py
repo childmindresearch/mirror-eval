@@ -1,8 +1,12 @@
+"""Module containing embedder implementations for text similarity."""
+
 from abc import ABC, abstractmethod
-import ollama
-from typing import Literal, Sequence
-from sklearn.metrics.pairwise import cosine_similarity
+from collections.abc import Sequence
+from typing import Literal
+
 import numpy as np
+import ollama
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 class Embedder(ABC):

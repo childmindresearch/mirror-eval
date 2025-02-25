@@ -1,6 +1,7 @@
 """Connections to the OPIK server."""
 
 import opik
+
 from mirror_eval.core import config
 
 

@@ -1,14 +1,14 @@
 """Tests for the metrics."""
 
 import math
+
 import pytest
-import numpy as np
-from unittest.mock import Mock, patch
-from mirror_eval.opik import metric
+
 from mirror_eval.core.embedder import (
     Embedder,
     OllamaEmbedder,
 )
+from mirror_eval.opik import metric
 
 
 def test_regex_metric_match() -> None:
