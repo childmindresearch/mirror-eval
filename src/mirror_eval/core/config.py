@@ -15,6 +15,11 @@ class Settings(pydantic_settings.BaseSettings):
 
     LOGGER_VERBOSITY: int = logging.INFO
 
+    model_config = pydantic_settings.SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+
 
 @functools.lru_cache
 def get_settings() -> Settings:

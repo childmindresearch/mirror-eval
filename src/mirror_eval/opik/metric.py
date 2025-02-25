@@ -10,6 +10,9 @@ import pydantic
 from opik.evaluation.metrics import base_metric, score_result
 from opik.evaluation.models import base_model, models_factory
 
+from mirror_eval.core.embedder import (
+    Embedder,
+)
 from mirror_eval.opik import template
 
 
@@ -175,6 +178,41 @@ class RegexMetric(base_metric.BaseMetric):
         )
 
 
+class EmbeddingMetric(base_metric.BaseMetric):
+    """Class to evaluate the similarity between two outputs."""
+
+    def __init__(
+        self,
+        embedder: Embedder,
+        name: str = "Embedding Metric",
+        *,
+        track: bool = True,
+    ) -> None:
+        """Initialize the embedding metric."""
+        super().__init__(name=name, track=track)
+        self._embedder = embedder
+
+    def score(
+        self,
+        first_response: str,
+        second_response: str,
+        **_ignored_kwargs: dict[str, object],
+    ) -> score_result.ScoreResult:
+        """Calculate the score for the given input and output.
+
+        Args:
+          first_response: The first response to evaluate.
+          second_response: The second response to evaluate.
+        """
+        similarity = self._embedder.get_similarity(
+            text1=first_response, text2=second_response
+        )
+        return score_result.ScoreResult(
+            name=self.name,
+            value=similarity,
+        )
+
+
 class LlmStatementMetric(base_metric.BaseMetric):
     """A float metric based on True/False statements evaluated by an LLM."""
 
@@ -219,7 +257,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         output: str,
         **_ignored_kwargs: Any,  # noqa: ANN401
     ) -> score_result.ScoreResult:
-        """Calculate the score for the given input and output.
+        """Calculate score.
 
         Args:
             input: The original input/question.

@@ -4,8 +4,6 @@ import opik
 
 from mirror_eval.core import config
 
-settings = config.get_settings()
-
 
 def get_client(api_key: str | None = None, workspace: str | None = None) -> opik.Opik:
     """Gets the OPIK client.
@@ -19,6 +17,7 @@ def get_client(api_key: str | None = None, workspace: str | None = None) -> opik
     Returns:
           The OPIK client.
     """
+    settings = config.get_settings()
     api_key = api_key or settings.OPIK_API_KEY
     workspace = workspace or settings.OPIK_WORKSPACE
 
@@ -26,5 +25,5 @@ def get_client(api_key: str | None = None, workspace: str | None = None) -> opik
         msg = "Opik API key and workspace must be set."
         raise OSError(msg)
 
-    opik.configure(api_key, workspace)
+    opik.configure(api_key, workspace, force=True)
     return opik.Opik()
