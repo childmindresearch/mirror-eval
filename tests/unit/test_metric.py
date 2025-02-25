@@ -4,11 +4,9 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
-import pytest
-from opik.evaluation.models import base_model
-
 import numpy as np
 import pytest
+from opik.evaluation.models import base_model
 from sklearn.metrics.pairwise import cosine_similarity
 
 from mirror_eval.core.embedder import Embedder
@@ -95,7 +93,7 @@ def test_embedding_metric_score(embedding_metric: metric.EmbeddingMetric) -> Non
     )
     assert math.isclose(result.value, 1.0)
 
-    
+
 def test_statement_metric() -> None:
     """Tests the statement metric happy path."""
     statements = ["This text is in French."]

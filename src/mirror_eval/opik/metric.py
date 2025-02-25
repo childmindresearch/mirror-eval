@@ -197,7 +197,7 @@ class EmbeddingMetric(base_metric.BaseMetric):
         first_response: str,
         second_response: str,
         **_ignored_kwargs: dict[str, object],
-     ) -> score_result.ScoreResult:
+    ) -> score_result.ScoreResult:
         """Calculate the score for the given input and output.
 
         Args:
@@ -211,8 +211,8 @@ class EmbeddingMetric(base_metric.BaseMetric):
             name=self.name,
             value=similarity,
         )
-   
-      
+
+
 class LlmStatementMetric(base_metric.BaseMetric):
     """A float metric based on True/False statements evaluated by an LLM."""
 
@@ -256,9 +256,9 @@ class LlmStatementMetric(base_metric.BaseMetric):
         input: str,  # noqa: A002
         output: str,
         **_ignored_kwargs: Any,  # noqa: ANN401
-    )
+    ) -> score_result.ScoreResult:
         """Calculate score.
-    
+
         Args:
             input: The original input/question.
             output: The LLM's output to evaluate.
