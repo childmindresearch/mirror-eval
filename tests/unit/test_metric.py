@@ -7,6 +7,7 @@ import pytest
 from mirror_eval.core.embedder import (
     Embedder,
     OllamaEmbedder,
+    MockEmbedder,
 )
 from mirror_eval.opik import metric
 
@@ -36,7 +37,7 @@ def test_regex_metric_no_match() -> None:
 @pytest.fixture
 def embedder() -> Embedder:
     """Fixture for the embedder."""
-    return OllamaEmbedder()
+    return MockEmbedder()
 
 
 @pytest.fixture
