@@ -1,5 +1,6 @@
-# MacOS system files
 local
+
+# MacOS system files
 .DS_Store
 
 # Ruff tmp files
