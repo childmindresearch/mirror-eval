@@ -2,6 +2,10 @@
 
 import math
 from collections.abc import Sequence
+from typing import Any
+
+import pytest
+from opik.evaluation.models import base_model
 
 import numpy as np
 import pytest
@@ -9,6 +13,28 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from mirror_eval.core.embedder import Embedder
 from mirror_eval.opik import metric
+
+
+class MockOpikModel(base_model.OpikBaseModel):
+    """Directly mocking methods of opik models seems to fail for some reason.
+
+    This just mocks the entire model instead.
+    """
+
+    def __init__(self) -> None:  # noqa: D107
+        pass
+
+    def generate_string(self, input: str, response_format: Any) -> str:  # type: ignore[override]  # noqa: A002, ANN401, ARG002, D102
+        return '[{"conclusion": true}]'
+
+    async def agenerate_string(self, input: str, response_format: Any) -> str:  # type: ignore[override]  # noqa: A002, ANN401, ARG002, D102
+        return '[{"conclusion": true}]'
+
+    def generate_provider_response(self) -> None:  # type: ignore[override]
+        """Required for compliance with base model."""
+
+    async def agenerate_provider_response(self) -> None:  # type: ignore[override]
+        """Required for compliance with base model."""
 
 
 def test_regex_metric_match() -> None:
@@ -68,3 +94,30 @@ def test_embedding_metric_score(embedding_metric: metric.EmbeddingMetric) -> Non
         second_response="Hello, world!",
     )
     assert math.isclose(result.value, 1.0)
+
+    
+def test_statement_metric() -> None:
+    """Tests the statement metric happy path."""
+    statements = ["This text is in French."]
+    input_text = "An input text."
+    output_text = "Oui, ce texte est en français."
+    statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
+
+    result = statement_metric.score(input=input_text, output=output_text)
+
+    assert result.name == "Statement Model"
+    assert result.value == 1
+
+
+@pytest.mark.asyncio
+async def test_async_statement_metric() -> None:
+    """Tests the statement metric async happy path."""
+    statements = ["This text is in French."]
+    input_text = "An input text."
+    output_text = "Oui, ce texte est en français."
+    statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
+
+    result = await statement_metric.ascore(input=input_text, output=output_text)
+
+    assert result.name == "Statement Model"
+    assert result.value == 1
