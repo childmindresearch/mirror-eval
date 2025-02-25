@@ -1,6 +1,5 @@
 """Tests for the opik.service module."""
 
-
 import pytest
 
 from mirror_eval.core import config

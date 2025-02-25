@@ -21,6 +21,22 @@ class Embedder(ABC):
         """Get the similarity between two texts."""
 
 
+class MockEmbedder(Embedder):
+    """A mock embedder that returns predictable embeddings for testing."""
+
+    def embed(self, text: str) -> Sequence[float]:
+        """Return a predictable embedding based on the text."""
+        if text == "Hello, world!":
+            return [1.0, 0.0]  # First basis vector
+        return [0.0, 1.0]  # Second basis vector
+
+    def get_similarity(self, text1: str, text2: str) -> float:
+        """Get cosine similarity between two texts using predictable embeddings."""
+        embedding1 = np.array([self.embed(text1)])
+        embedding2 = np.array([self.embed(text2)])
+        return float(cosine_similarity(embedding1, embedding2)[0, 0])
+
+
 class OllamaEmbedder(Embedder):
     """An embedder that uses Ollama."""
 
