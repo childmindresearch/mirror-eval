@@ -14,18 +14,19 @@ from mirror_eval.opik import metric
 
 
 class MockOpikModel(base_model.OpikBaseModel):
-    """Directly mocking methods of opik models seems to fail for some reason.
-
-    This just mocks the entire model instead.
-    """
+    """Mock model for testing."""
 
     def __init__(self) -> None:  # noqa: D107
         pass
 
     def generate_string(self, input: str, response_format: Any) -> str:  # type: ignore[override]  # noqa: A002, ANN401, ARG002, D102
+        if response_format == metric.PreferenceResponse:
+            return '{"response": 2, "reason": "Response 2 is more detailed"}'
         return '[{"conclusion": true}]'
 
     async def agenerate_string(self, input: str, response_format: Any) -> str:  # type: ignore[override]  # noqa: A002, ANN401, ARG002, D102
+        if response_format == metric.PreferenceResponse:
+            return '{"response": 2, "reason": "Response 2 is more detailed"}'
         return '[{"conclusion": true}]'
 
     def generate_provider_response(self) -> None:  # type: ignore[override]
@@ -119,3 +120,20 @@ async def test_async_statement_metric() -> None:
 
     assert result.name == "Statement Model"
     assert result.value == 1
+
+
+def test_preference_metric() -> None:
+    """Tests the preference metric happy path."""
+    initial_prompt = "Explain quantum computing."
+    first_response = "Quantum computers use qubits."
+    second_response = "A detailed explanation of quantum superposition..."
+    preference_metric = metric.PreferenceMetric(MockOpikModel())
+
+    result = preference_metric.score(
+        initial_prompt=initial_prompt,
+        first_response=first_response,
+        second_response=second_response,
+    )
+
+    assert result.name == "Preference Model"
+    assert "more detailed" in result.reason.lower()

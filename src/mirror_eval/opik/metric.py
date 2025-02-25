@@ -13,7 +13,7 @@ from opik.evaluation.models import base_model, models_factory
 from mirror_eval.core.embedder import (
     Embedder,
 )
-from mirror_eval.opik import template
+from mirror_eval.opik import prompts, template
 
 
 class QueryResponse(pydantic.BaseModel):
@@ -21,6 +21,13 @@ class QueryResponse(pydantic.BaseModel):
 
     response: str
     conclusion: bool
+
+
+class PreferenceResponse(pydantic.BaseModel):
+    """The response model for the preference metric."""
+
+    response: int
+    reason: str
 
 
 class QueryMetric(base_metric.BaseMetric):
@@ -348,4 +355,52 @@ class LlmStatementMetric(base_metric.BaseMetric):
         return score_result.ScoreResult(
             name=self._name,
             value=score,
+        )
+
+
+class PreferenceMetric(base_metric.BaseMetric):
+    """Metric that compares two responses and returns the better of the two."""
+
+    def __init__(
+        self,
+        model: str | base_model.OpikBaseModel | None = None,
+        name: str = "Preference Model",
+        evaluation_instruction: str | None = None,
+        *,
+        track: bool = True,
+    ) -> None:
+        """Initialize the preference metric."""
+        super().__init__(name=name, track=track)
+        self._evaluation_instruction = (
+            evaluation_instruction or prompts.preference_prompt
+        )
+        self._model = (
+            model
+            if isinstance(model, base_model.OpikBaseModel)
+            else models_factory.get(model_name=model)
+        )
+
+    def score(
+        self,
+        initial_prompt: str,
+        first_response: str,
+        second_response: str,
+        **_ignored_kwargs: Any,  # noqa: ANN401
+    ) -> score_result.ScoreResult:
+        """Return the better of the two responses."""
+        llm_query = self._evaluation_instruction.format(
+            initial_prompt=initial_prompt,
+            first_response=first_response,
+            second_response=second_response,
+        )
+        model_output = json.loads(
+            self._model.generate_string(
+                input=llm_query,
+                response_format=PreferenceResponse,
+            )
+        )
+        return score_result.ScoreResult(
+            name=self.name,
+            value=model_output["response"],
+            reason=model_output["reason"],
         )
