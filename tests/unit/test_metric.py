@@ -6,7 +6,6 @@ import pytest
 
 from mirror_eval.core.embedder import (
     Embedder,
-    OllamaEmbedder,
     MockEmbedder,
 )
 from mirror_eval.opik import metric
