@@ -13,7 +13,7 @@ from opik.evaluation.models import base_model, models_factory
 from mirror_eval.core.embedder import (
     Embedder,
 )
-from mirror_eval.opik import template
+from mirror_eval.opik import prompts, template
 
 
 class QueryResponse(pydantic.BaseModel):
@@ -21,6 +21,13 @@ class QueryResponse(pydantic.BaseModel):
 
     response: str
     conclusion: bool
+
+
+class PreferenceResponse(pydantic.BaseModel):
+    """The response model for the preference metric."""
+
+    response: int
+    reason: str
 
 
 class QueryMetric(base_metric.BaseMetric):
@@ -348,4 +355,126 @@ class LlmStatementMetric(base_metric.BaseMetric):
         return score_result.ScoreResult(
             name=self._name,
             value=score,
+        )
+
+
+class PreferenceMetric(base_metric.BaseMetric):
+    """Metric that compares two responses and returns the better of the two."""
+
+    def __init__(
+        self,
+        model: str | base_model.OpikBaseModel | None = None,
+        name: str = "Preference Model",
+        evaluation_instruction: str | None = None,
+        *,
+        track: bool = True,
+    ) -> None:
+        """Initialize the preference metric.
+
+        Args:
+            model: The model to use in metric computation.
+            name: The name of the metric.
+            evaluation_instruction: The evaluation instruction.
+            track: Whether to track the metric. Defaults to True.
+        """
+        super().__init__(name=name, track=track)
+        self._evaluation_instruction = (
+            evaluation_instruction or prompts.preference_prompt_single
+        )
+        self._model = (
+            model
+            if isinstance(model, base_model.OpikBaseModel)
+            else models_factory.get(model_name=model)
+        )
+
+    def score(
+        self,
+        initial_prompt: str,
+        first_response: str,
+        second_response: str,
+        second_prompt: str | None = None,
+        **_ignored_kwargs: Any,  # noqa: ANN401
+    ) -> score_result.ScoreResult:
+        """Return the better of the two responses.
+
+        If second prompt provided, uses different prompt that passes both tasks to model
+        Otherwise, uses the single prompt evaluation.
+
+        Args:
+            initial_prompt: The initial prompt.
+            first_response: The first response.
+            second_response: The second response.
+            second_prompt: The second prompt. [Optional]
+
+        Returns:
+            A ScoreResult with the better response and the reason.
+        """
+        if second_prompt is not None:
+            self._evaluation_instruction = prompts.preference_prompt_double
+            llm_query = self._evaluation_instruction.format(
+                first_prompt=initial_prompt,
+                second_prompt=second_prompt,
+                first_response=first_response,
+                second_response=second_response,
+            )
+        else:
+            llm_query = self._evaluation_instruction.format(
+                initial_prompt=initial_prompt,
+                first_response=first_response,
+                second_response=second_response,
+            )
+        model_output = json.loads(
+            self._model.generate_string(
+                input=llm_query,
+                response_format=PreferenceResponse,
+            )
+        )
+        return score_result.ScoreResult(
+            name=self.name,
+            value=model_output["response"],
+            reason=model_output["reason"],
+        )
+
+    async def ascore(
+        self,
+        initial_prompt: str,
+        first_response: str,
+        second_response: str,
+        second_prompt: str | None = None,
+    ) -> score_result.ScoreResult:
+        """Return the better of the two responses.
+
+        Args:
+            initial_prompt: The initial prompt.
+            first_response: The first response.
+            second_response: The second response.
+            second_prompt: The second prompt. [Optional]
+
+        Returns:
+            A ScoreResult with the better response and the reason.
+        """
+        if second_prompt is not None:
+            self._evaluation_instruction = prompts.preference_prompt_double
+            llm_query = self._evaluation_instruction.format(
+                first_prompt=initial_prompt,
+                second_prompt=second_prompt,
+                first_response=first_response,
+                second_response=second_response,
+            )
+        else:
+            llm_query = self._evaluation_instruction.format(
+                initial_prompt=initial_prompt,
+                first_response=first_response,
+                second_response=second_response,
+            )
+        model_output = json.loads(
+            await self._model.agenerate_string(
+                input=llm_query,
+                response_format=PreferenceResponse,
+            )
+        )
+        return score_result.ScoreResult(
+            name=self.name,
+            value=model_output["response"],
+            reason=model_output["reason"],
         )
