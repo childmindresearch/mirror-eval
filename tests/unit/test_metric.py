@@ -137,3 +137,21 @@ def test_preference_metric() -> None:
 
     assert result.name == "Preference Model"
     assert "more detailed" in result.reason.lower()
+
+
+def test_logprobs_metric() -> None:
+    """Tests the logprobs metric happy path."""
+    logprobs_metric = metric.LogprobsMetric(model="gpt-4o-mini", top_logprobs=20)
+
+    result = logprobs_metric.score(
+        response="I am pretty happy today.",
+        evaluation_task="""
+        Give the input a sentiment score between 1-10.
+        Return only a number, return no other text.
+        """,
+    )
+
+    assert result.name == "Logprobs Comparison"
+    assert isinstance(result.value, float)
+    assert result.value > 0
+    assert result.value < 11  # noqa: PLR2004

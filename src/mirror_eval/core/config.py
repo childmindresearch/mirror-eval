@@ -12,6 +12,7 @@ class Settings(pydantic_settings.BaseSettings):
 
     OPIK_API_KEY: str | None = pydantic.Field(None)
     OPIK_WORKSPACE: str | None = pydantic.Field(None)
+    OPENAI_API_KEY: str | None = pydantic.Field(None)
 
     LOGGER_VERBOSITY: int = logging.INFO
 

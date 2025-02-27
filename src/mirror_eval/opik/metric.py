@@ -3,8 +3,10 @@
 import json
 import re
 import statistics
-from typing import Any
+import warnings
+from typing import Any, Literal
 
+import numpy as np
 import opik
 import pydantic
 from opik.evaluation.metrics import base_metric, score_result
@@ -28,6 +30,12 @@ class PreferenceResponse(pydantic.BaseModel):
 
     response: int
     reason: str
+
+
+class LogprobsResponse(pydantic.BaseModel):
+    """The response model for the logprobs metric."""
+
+    value: int | float
 
 
 class QueryMetric(base_metric.BaseMetric):
@@ -477,4 +485,78 @@ class PreferenceMetric(base_metric.BaseMetric):
             name=self.name,
             value=model_output["response"],
             reason=model_output["reason"],
+        )
+
+
+class LogprobsMetric(base_metric.BaseMetric):
+    """Metric that returns a score param based on multiplied logprobs."""
+
+    def __init__(
+        self,
+        model: Literal["gpt-4o-mini"],
+        name: str = "Logprobs Comparison",
+        top_logprobs: int = 20,
+        *,
+        track: bool = True,
+    ) -> None:
+        """Initialize the logprobs metric.
+
+        Args:
+            model: The model to use in metric computation.
+            name: The name of the metric.
+            top_logprobs: The number of top logprobs to use.
+            track: Whether to track the metric. Defaults to True.
+        """
+        super().__init__(name=name, track=track)
+        self._model = models_factory.get(model_name=model)
+        self._top_logprobs = top_logprobs
+
+    def _get_final_score(self, log_probs: list) -> float:
+        """Returns a final score based on the logprobs."""
+        value = 0.0
+        for choice in log_probs:
+            try:
+                token_value = int(choice.token)
+                logprob = choice.logprob
+                prob = np.exp(logprob)
+                contribution = float(token_value * prob)
+                value += contribution
+            except (ValueError, TypeError):
+                warnings.warn(
+                    f"Skipping non-numeric token: {choice.token}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                continue
+
+        return float(value)
+
+    def score(
+        self,
+        response: str,
+        evaluation_task: str,
+    ) -> score_result.ScoreResult:
+        """Scores a result defined by evaluation task, but multiplied by logprobs.
+
+        Args:
+            response: The response to score.
+            evaluation_task: The evaluation task.
+
+        Returns:
+            A ScoreResult with the final score.
+        """
+        response = self._model.generate_provider_response(
+            messages=[
+                {"role": "system", "content": evaluation_task},
+                {"role": "user", "content": response},
+            ],
+            logprobs=True,
+            top_logprobs=self._top_logprobs,
+        )
+
+        return score_result.ScoreResult(
+            name=self.name,
+            value=self._get_final_score(
+                response.choices[0].logprobs.content[0].top_logprobs,  # type: ignore  # noqa: PGH003
+            ),
         )
