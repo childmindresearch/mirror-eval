@@ -385,14 +385,34 @@ class PreferenceMetric(base_metric.BaseMetric):
         initial_prompt: str,
         first_response: str,
         second_response: str,
+        second_prompt: str | None = None,
         **_ignored_kwargs: Any,  # noqa: ANN401
     ) -> score_result.ScoreResult:
-        """Return the better of the two responses."""
-        llm_query = self._evaluation_instruction.format(
-            initial_prompt=initial_prompt,
-            first_response=first_response,
-            second_response=second_response,
-        )
+        """Return the better of the two responses.
+
+        Args:
+            initial_prompt: The initial prompt.
+            first_response: The first response.
+            second_response: The second response.
+            second_prompt: The second prompt. If provided, run evaluation comparing two prompts.
+
+        Returns:
+            A ScoreResult with the better response and the reason.
+        """
+        if second_prompt is not None:
+            self._evaluation_instruction = prompts.preference_prompt_double
+            llm_query = self._evaluation_instruction.format(
+                first_prompt=initial_prompt,
+                second_prompt=second_prompt,
+                first_response=first_response,
+                second_response=second_response,
+            )
+        else:
+            llm_query = self._evaluation_instruction.format(
+                initial_prompt=initial_prompt,
+                first_response=first_response,
+                second_response=second_response,
+            )
         model_output = json.loads(
             self._model.generate_string(
                 input=llm_query,
@@ -404,3 +424,5 @@ class PreferenceMetric(base_metric.BaseMetric):
             value=model_output["response"],
             reason=model_output["reason"],
         )
+
+
