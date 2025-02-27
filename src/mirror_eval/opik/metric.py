@@ -397,7 +397,7 @@ class PreferenceMetric(base_metric.BaseMetric):
     ) -> score_result.ScoreResult:
         """Return the better of the two responses.
 
-        If second prompt is provided, uses different prompt that passes both tasks to model.
+        If second prompt provided, uses different prompt that passes both tasks to model
         Otherwise, uses the single prompt evaluation.
 
         Args:
