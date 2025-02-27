@@ -155,3 +155,18 @@ def test_logprobs_metric() -> None:
     assert isinstance(result.value, float)
     assert result.value > 0
     assert result.value < 11  # noqa: PLR2004
+
+
+def test_logprobs_get_final_score() -> None:
+    """Test the logprobs scoring function directly."""
+    metric_instance = metric.LogprobsMetric(model="gpt-4o-mini")
+    mock_logprobs = [
+        type("Logprob", (), {"token": "7", "logprob": -0.1}),
+        type("Logprob", (), {"token": "3", "logprob": -1.0}),
+        type("Logprob", (), {"token": "{", "logprob": -5.0}),
+    ]
+
+    result = metric_instance._get_final_score(mock_logprobs)  # noqa: SLF001
+
+    expected = 7 * np.exp(-0.1) + 3 * np.exp(-1.0)
+    assert math.isclose(result, expected, rel_tol=1e-10)
