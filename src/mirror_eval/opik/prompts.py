@@ -12,8 +12,8 @@ Response 2:
 {second_response}
 
 Return a JSON object with:
-- "response": 1 if Response 1 is better, 2 if Response 2 is better
 - "reason": A brief explanation of why you chose that response
+- "response": 1 if Response 1 is better, 2 if Response 2 is better
 
 Example:
 {{
@@ -38,8 +38,8 @@ Response 2:
 {second_response}
 
 Return a JSON object with:
-- "response": 1 if Response 1 is better, 2 if Response 2 is better
 - "reason": A brief explanation of why you chose that response
+- "response": 1 if Response 1 is better, 2 if Response 2 is better
 
 Example:
 {{
