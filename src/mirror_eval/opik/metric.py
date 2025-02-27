@@ -394,7 +394,7 @@ class PreferenceMetric(base_metric.BaseMetric):
             initial_prompt: The initial prompt.
             first_response: The first response.
             second_response: The second response.
-            second_prompt: The second prompt. If provided, run evaluation comparing two prompts.
+            second_prompt: The second prompt. [Optional]
 
         Returns:
             A ScoreResult with the better response and the reason.
@@ -424,5 +424,3 @@ class PreferenceMetric(base_metric.BaseMetric):
             value=model_output["response"],
             reason=model_output["reason"],
         )
-
-

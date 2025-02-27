@@ -50,7 +50,7 @@ def run_relevance_metric_experiment() -> None:
     client = service.get_client()
     dataset = client.get_dataset("RAPI_test")
     relevance_metric = metric.ContextualRelevanceMetric(model="gpt-4")
-    
+
     evaluation.evaluate_prompt(
         dataset=dataset,
         messages=[

@@ -24,7 +24,7 @@ Example:
 
 preference_prompt_double = """
 Given the following two prompts and two responses, determine which response is better.
-The two prompts represent the same task, but have slight differences in their instructions.
+Both prompts represent the same task, but have slight differences in their instructions.
 Determine which response is better given the instructions of the prompts.
 
 First prompt: {first_prompt}
@@ -47,5 +47,3 @@ Example:
     "response": 2
 }}
 """
-
-
