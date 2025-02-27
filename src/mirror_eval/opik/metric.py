@@ -372,7 +372,7 @@ class PreferenceMetric(base_metric.BaseMetric):
         """Initialize the preference metric."""
         super().__init__(name=name, track=track)
         self._evaluation_instruction = (
-            evaluation_instruction or prompts.preference_prompt
+            evaluation_instruction or prompts.preference_prompt_single
         )
         self._model = (
             model
