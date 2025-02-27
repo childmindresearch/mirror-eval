@@ -3,7 +3,6 @@
 import json
 import re
 import statistics
-import warnings
 from typing import Any, Literal
 
 import numpy as np
@@ -519,14 +518,8 @@ class LogprobsMetric(base_metric.BaseMetric):
                 token_value = int(choice.token)
                 logprob = choice.logprob
                 prob = np.exp(logprob)
-                contribution = float(token_value * prob)
-                value += contribution
+                value += float(token_value * prob)
             except (ValueError, TypeError):
-                warnings.warn(
-                    f"Skipping non-numeric token: {choice.token}",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
                 continue
 
         return float(value)
