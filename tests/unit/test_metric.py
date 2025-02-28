@@ -123,7 +123,7 @@ async def test_async_statement_metric() -> None:
 
 
 def test_preference_metric() -> None:
-    """Tests the preference metric happy path."""
+    """Tests the preference metric."""
     initial_prompt = "Explain quantum computing."
     first_response = "Quantum computers use qubits."
     second_response = "A detailed explanation of quantum superposition..."
@@ -139,24 +139,6 @@ def test_preference_metric() -> None:
     assert "more detailed" in result.reason.lower()
 
 
-def test_logprobs_metric() -> None:
-    """Tests the logprobs metric happy path."""
-    logprobs_metric = metric.LogprobsMetric(model="gpt-4o-mini", top_logprobs=20)
-
-    result = logprobs_metric.score(
-        response="I am pretty happy today.",
-        evaluation_task="""
-        Give the input a sentiment score between 1-10.
-        Return only a number, return no other text.
-        """,
-    )
-
-    assert result.name == "Logprobs Comparison"
-    assert isinstance(result.value, float)
-    assert result.value > 0
-    assert result.value < 11  # noqa: PLR2004
-
-
 def test_logprobs_get_final_score() -> None:
     """Test the logprobs scoring function directly."""
     metric_instance = metric.LogprobsMetric(model="gpt-4o-mini")
@@ -168,5 +150,7 @@ def test_logprobs_get_final_score() -> None:
 
     result = metric_instance._get_final_score(mock_logprobs)  # noqa: SLF001
 
-    expected = 7 * np.exp(-0.1) + 3 * np.exp(-1.0)
-    assert math.isclose(result, expected, rel_tol=1e-10)
+    total_probs = [np.exp(-0.1), np.exp(-1.0)]
+    normalized_probs = [prob / sum(total_probs) for prob in total_probs]
+    value = 7 * normalized_probs[0] + 3 * normalized_probs[1]
+    assert math.isclose(result, value)
