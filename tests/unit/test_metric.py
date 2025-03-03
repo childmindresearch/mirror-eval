@@ -123,7 +123,7 @@ async def test_async_statement_metric() -> None:
 
 
 def test_preference_metric() -> None:
-    """Tests the preference metric happy path."""
+    """Tests the preference metric."""
     initial_prompt = "Explain quantum computing."
     first_response = "Quantum computers use qubits."
     second_response = "A detailed explanation of quantum superposition..."
@@ -137,3 +137,20 @@ def test_preference_metric() -> None:
 
     assert result.name == "Preference Model"
     assert "more detailed" in result.reason.lower()
+
+
+def test_logprobs_get_final_score() -> None:
+    """Test the logprobs scoring function directly."""
+    metric_instance = metric.LogprobsMetric(model="gpt-4o-mini")
+    mock_logprobs = [
+        type("Logprob", (), {"token": "7", "logprob": -0.1}),
+        type("Logprob", (), {"token": "3", "logprob": -1.0}),
+        type("Logprob", (), {"token": "{", "logprob": -5.0}),
+    ]
+
+    result = metric_instance._get_final_score(mock_logprobs)  # noqa: SLF001
+
+    total_probs = [np.exp(-0.1), np.exp(-1.0)]
+    normalized_probs = [prob / sum(total_probs) for prob in total_probs]
+    value = 7 * normalized_probs[0] + 3 * normalized_probs[1]
+    assert math.isclose(result, value)

@@ -3,10 +3,12 @@
 import json
 import re
 import statistics
-from typing import Any
+from typing import Any, Literal
 
+import numpy as np
 import opik
 import pydantic
+from litellm.types.utils import TopLogprob
 from opik.evaluation.metrics import base_metric, score_result
 from opik.evaluation.models import base_model, models_factory
 
@@ -477,4 +479,122 @@ class PreferenceMetric(base_metric.BaseMetric):
             name=self.name,
             value=model_output["response"],
             reason=model_output["reason"],
+        )
+
+
+class LogprobsMetric(base_metric.BaseMetric):
+    """Metric that returns a score param based on multiplied logprobs.
+
+    Provide an LLM response to another task and an evaluation criteria.
+    This metric calculates the score as the average of the top logprobs.
+    Better way to get a continous value for a comparison between two responses.
+    """
+
+    def __init__(
+        self,
+        model: Literal["gpt-4o-mini"],
+        name: str = "Logprobs Comparison",
+        top_logprobs: int = 20,
+        *,
+        track: bool = True,
+    ) -> None:
+        """Initialize the logprobs metric.
+
+        Args:
+            model: The model to use in metric computation.
+            name: The name of the metric.
+            top_logprobs: The number of top logprobs to use.
+            track: Whether to track the metric. Defaults to True.
+        """
+        super().__init__(name=name, track=track)
+        self._model = models_factory.get(model_name=model)
+        self._top_logprobs = top_logprobs
+
+    def _normalize_probs(self, probs: list[float]) -> list[float]:
+        """Normalizes the logprobs."""
+        return [prob / sum(probs) for prob in probs]
+
+    def _calculate_final_value(
+        self,
+        tokens: list[int],
+        probs: list[float],
+    ) -> float:
+        """Calculates the final value."""
+        value = 0.0
+        for token, prob in zip(tokens, probs, strict=False):
+            value += token * prob
+        return value
+
+    def _get_final_score(self, log_probs: list[TopLogprob]) -> float:
+        """Returns a final score based on the logprobs."""
+        tokens, probs = [], []
+        for choice in log_probs:
+            try:
+                tokens.append(int(choice.token))
+            except (ValueError, TypeError):
+                continue
+            probs.append(np.exp(choice.logprob))
+
+        probs = self._normalize_probs(probs)
+        value = self._calculate_final_value(tokens=tokens, probs=probs)
+        return float(value)
+
+    def score(
+        self,
+        output: str,
+        evaluation_task: str,
+    ) -> score_result.ScoreResult:
+        """Scores a result defined by evaluation task, but multiplied by logprobs.
+
+        Args:
+            output: The output to score.
+            evaluation_task: The evaluation task.
+
+        Returns:
+            A ScoreResult with the final score.
+        """
+        response = self._model.generate_provider_response(
+            messages=[
+                {"role": "system", "content": evaluation_task},
+                {"role": "user", "content": output},
+            ],
+            logprobs=True,
+            top_logprobs=self._top_logprobs,
+        )
+
+        return score_result.ScoreResult(
+            name=self.name,
+            value=self._get_final_score(
+                response.choices[0].logprobs.content[0].top_logprobs,
+            ),
+        )
+
+    async def ascore(
+        self,
+        output: str,
+        evaluation_task: str,
+    ) -> score_result.ScoreResult:
+        """Async version of the score method.
+
+        Args:
+            output: The output to score.
+            evaluation_task: The evaluation task.
+
+        Returns:
+            A ScoreResult with the final score.
+        """
+        response = await self._model.generate_provider_response(
+            messages=[
+                {"role": "system", "content": evaluation_task},
+                {"role": "user", "content": output},
+            ],
+            logprobs=True,
+            top_logprobs=self._top_logprobs,
+        )
+
+        return score_result.ScoreResult(
+            name=self.name,
+            value=self._get_final_score(
+                response.choices[0].logprobs.content[0].top_logprobs,
+            ),
         )
