@@ -8,6 +8,7 @@ from typing import Any, Literal
 import numpy as np
 import opik
 import pydantic
+from litellm.types.utils import TopLogprob
 from opik.evaluation.metrics import base_metric, score_result
 from opik.evaluation.models import base_model, models_factory
 
@@ -524,7 +525,7 @@ class LogprobsMetric(base_metric.BaseMetric):
             value += token * prob
         return value
 
-    def _get_final_score(self, log_probs: list) -> float:
+    def _get_final_score(self, log_probs: list[TopLogprob]) -> float:
         """Returns a final score based on the logprobs."""
         tokens, probs = [], []
         for choice in log_probs:
