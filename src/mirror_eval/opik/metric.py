@@ -1,6 +1,5 @@
 """Custom metrics for OPIK experiments."""
 
-import asyncio
 import json
 import re
 import statistics
@@ -269,6 +268,8 @@ class LlmStatementMetric(base_metric.BaseMetric):
         self,
         input: str,  # noqa: A002
         output: str,
+        *,
+        strict: bool | None = None,
         **_ignored_kwargs: Any,  # noqa: ANN401
     ) -> score_result.ScoreResult:
         """Calculate score.
@@ -276,12 +277,42 @@ class LlmStatementMetric(base_metric.BaseMetric):
         Args:
             input: The original input/question.
             output: The LLM's output to evaluate.
+            strict: Whether to place regex restrictions on the output. Not
+                all models support this. If None (default), will try strict
+                first and fallback to non-strict on failure.
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
-            A ScoreResult with 1 if a match was found, 0 otherwise.
+            A ScoreResult with the average of the statements' truthfulness.
         """
-        return asyncio.run(self.ascore(input, output))
+        if not self._statements_tracked:
+            self._track_statements(self._statements)
+
+        if strict is None:
+            try:
+                model_output = self._model.generate_string(
+                    input=self._get_input(input, output),
+                    response_format=self._get_response_model(strict=True),
+                )
+            except litellm.BadRequestError as exc_info:
+                if "Invalid schema for response_format" in str(exc_info):
+                    logger.warning(
+                        "Could not run this model with strict properties. "
+                        "Retrying without...",
+                        exc_info=exc_info,
+                    )
+                    model_output = self._model.generate_string(
+                        input=self._get_input(input, output),
+                        response_format=self._get_response_model(strict=False),
+                    )
+                else:
+                    raise
+        else:
+            model_output = self._model.generate_string(
+                input=self._get_input(input, output),
+                response_format=self._get_response_model(strict=strict),
+            )
+        return self._parse_model_output(model_output)
 
     async def ascore(
         self,
