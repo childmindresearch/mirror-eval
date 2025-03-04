@@ -19,18 +19,14 @@ from mirror_eval.opik import metric
 class MockOpikModel(base_model.OpikBaseModel):
     """Mock model for testing."""
 
-    def __init__(self) -> None:  # noqa: D107
-        pass
+    def __init__(self, output: str) -> None:  # noqa: D107
+        self._output = output or "output"
 
     def generate_string(self, input: str, response_format: Any) -> str:  # type: ignore[override]  # noqa: A002, ANN401, ARG002, D102
-        if response_format == metric.PreferenceResponse:
-            return '{"response": 2, "reason": "Response 2 is more detailed"}'
-        return '[{"conclusion": true}]'
+        return self._output
 
     async def agenerate_string(self, input: str, response_format: Any) -> str:  # type: ignore[override]  # noqa: A002, ANN401, ARG002, D102
-        if response_format == metric.PreferenceResponse:
-            return '{"response": 2, "reason": "Response 2 is more detailed"}'
-        return '[{"conclusion": true}]'
+        return self._output
 
     def generate_provider_response(self) -> None:  # type: ignore[override]
         """Required for compliance with base model."""
@@ -116,7 +112,10 @@ async def test_statement_metric_strict(use_async: bool) -> None:  # noqa: FBT001
     statements = ["This text is in French."]
     input_text = "An input text."
     output_text = "Oui, ce texte est en français."
-    statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
+    mock_model = MockOpikModel(
+        output=' "", "conclusion": true}]'
+    )  # Accounts for JSON preamble included in the scoring function.
+    statement_metric = metric.LlmStatementMetric(statements, mock_model)
 
     if use_async:
         result = await statement_metric.ascore(
@@ -133,7 +132,7 @@ async def test_statement_metric_strict(use_async: bool) -> None:  # noqa: FBT001
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("use_async", [True, False])
-async def test_statement_metric_fallback_not_strict(
+async def test_statement_metric_fallback_happy_path(
     caplog: pytest_logging.LogCaptureFixture,
     mocker: pytest_mock.MockerFixture,
     use_async: bool,  # noqa: FBT001
@@ -148,21 +147,20 @@ async def test_statement_metric_fallback_not_strict(
         if call_count == 1:
             msg = "Invalid schema for response_format ..."
             raise litellm.BadRequestError(msg, "", "")
-        return '[{"conclusion": true}]'
+        # Output accounts for JSON preamble included in the scoring function.
+        return ' "responses statement", "conclusion": true}]'
 
-    if use_async:
-        spy = mocker.patch.object(
-            MockOpikModel, "agenerate_string", side_effect=side_effect
-        )
-    else:
-        spy = mocker.patch.object(
-            MockOpikModel, "generate_string", side_effect=side_effect
-        )
+    spy = mocker.patch.object(
+        MockOpikModel,
+        attribute="agenerate_string" if use_async else "generate_string",
+        side_effect=side_effect,
+    )
 
     statements = ["This text is in French."]
     input_text = "An input text."
     output_text = "Oui, ce texte est en français."
-    statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
+    mock_model = MockOpikModel("")  # Output is mocked in side_effect
+    statement_metric = metric.LlmStatementMetric(statements, mock_model)
 
     if use_async:
         result = await statement_metric.ascore(input=input_text, output=output_text)
@@ -197,8 +195,11 @@ async def test_statement_metric_fallback_reraise(
             MockOpikModel, "generate_string", side_effect=raise_error
         )
     statements = ["This text is in French."]
+    mock_model = MockOpikModel(
+        output=' "", "conclusion": true}]'
+    )  # Accounts for JSON preamble included in the scoring function.
+    statement_metric = metric.LlmStatementMetric(statements, mock_model)
 
-    statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
     with pytest.raises(litellm.BadRequestError):  # noqa: PT012
         if use_async:
             await statement_metric.ascore(input="", output="")
@@ -215,7 +216,9 @@ async def test_preference_metric(use_async: bool) -> None:  # noqa: FBT001
     initial_prompt = "Explain quantum computing."
     first_response = "Quantum computers use qubits."
     second_response = "A detailed explanation of quantum superposition..."
-    preference_metric = metric.PreferenceMetric(MockOpikModel())
+    preference_metric = metric.PreferenceMetric(
+        MockOpikModel(output='{"response": 2, "reason": "Response 2 is more detailed"}')
+    )
 
     if use_async:
         result = await preference_metric.ascore(

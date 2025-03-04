@@ -249,6 +249,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         self._statements = statements
         self._statements_tracked = False
         self._name = name
+        self._preamble = '[{\n    "statement": '
 
         if isinstance(model, base_model.OpikBaseModel):
             self._model = model
@@ -288,8 +289,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
-        preamble = '\n\n[{\n    "statement": '
-        prompt = self._get_prompt(input, output) + preamble
+        prompt = self._get_prompt(input, output) + self._preamble
         if strict is None:
             try:
                 model_output = self._model.generate_string(
@@ -314,7 +314,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
                 input=prompt,
                 response_format=self._get_response_model(strict=strict),
             )
-        return self._parse_model_output(preamble + model_output)
+        return self._parse_model_output(model_output)
 
     async def ascore(
         self,
@@ -340,8 +340,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
-        preamble = '\n\n[{\n    "statement": '
-        prompt = self._get_prompt(input, output) + preamble
+        prompt = self._get_prompt(input, output) + "\n\n" + self._preamble
         if strict is None:
             try:
                 model_output = await self._model.agenerate_string(
@@ -366,7 +365,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
                 input=prompt,
                 response_format=self._get_response_model(strict=strict),
             )
-        return self._parse_model_output(preamble + model_output)
+        return self._parse_model_output(model_output)
 
     def _get_prompt(self, input: str, output: str) -> str:  # noqa: A002
         """Gets the input prompt for scoring.
@@ -422,7 +421,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         Returns:
             A ScoreResults wherein the value is the average score.
         """
-        dict_content = json.loads(content)
+        dict_content = json.loads(self._preamble + content)
         score = statistics.mean(response["conclusion"] for response in dict_content)
         return score_result.ScoreResult(
             name=self._name,
