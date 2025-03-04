@@ -288,28 +288,29 @@ class LlmStatementMetric(base_metric.BaseMetric):
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
+        prompt = self._get_prompt(input, output)
         if strict is None:
             try:
                 model_output = self._model.generate_string(
-                    input=self._get_input(input, output),
+                    input=prompt,
                     response_format=self._get_response_model(strict=True),
                 )
             except litellm.BadRequestError as exc_info:
-                if "Invalid schema for response_format" in str(exc_info):
-                    logger.warning(
-                        "Could not run this model with strict properties. "
-                        "Retrying without...",
-                        exc_info=exc_info,
-                    )
-                    model_output = self._model.generate_string(
-                        input=self._get_input(input, output),
-                        response_format=self._get_response_model(strict=False),
-                    )
-                else:
+                if "Invalid schema for response_format" not in str(exc_info):
                     raise
+                logger.warning(
+                    "Could not run this model with strict properties. "
+                    "Retrying without...",
+                    exc_info=exc_info,
+                )
+                model_output = self._model.generate_string(
+                    input=prompt,
+                    response_format=self._get_response_model(strict=False),
+                )
+
         else:
             model_output = self._model.generate_string(
-                input=self._get_input(input, output),
+                input=prompt,
                 response_format=self._get_response_model(strict=strict),
             )
         return self._parse_model_output(model_output)
@@ -333,15 +334,16 @@ class LlmStatementMetric(base_metric.BaseMetric):
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
-            A ScoreResult with 1 if a match was found, 0 otherwise.
+            A ScoreResult with the average of the statements' truthfulness.
         """
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
+        prompt = self._get_prompt(input, output)
         if strict is None:
             try:
                 model_output = await self._model.agenerate_string(
-                    input=self._get_input(input, output),
+                    input=prompt,
                     response_format=self._get_response_model(strict=True),
                 )
             except litellm.BadRequestError as exc_info:
@@ -352,19 +354,19 @@ class LlmStatementMetric(base_metric.BaseMetric):
                         exc_info=exc_info,
                     )
                     model_output = await self._model.agenerate_string(
-                        input=self._get_input(input, output),
+                        input=prompt,
                         response_format=self._get_response_model(strict=False),
                     )
                 else:
                     raise
         else:
             model_output = await self._model.agenerate_string(
-                input=self._get_input(input, output),
+                input=prompt,
                 response_format=self._get_response_model(strict=strict),
             )
         return self._parse_model_output(model_output)
 
-    def _get_input(self, input: str, output: str) -> str:  # noqa: A002
+    def _get_prompt(self, input: str, output: str) -> str:  # noqa: A002
         """Gets the input prompt for scoring.
 
         Returns:

@@ -89,30 +89,54 @@ def embedding_metric(mock_embedder: Embedder) -> metric.EmbeddingMetric:
     return metric.EmbeddingMetric(mock_embedder)
 
 
-def test_embedding_metric_score(embedding_metric: metric.EmbeddingMetric) -> None:
+@pytest.mark.asyncio
+@pytest.mark.parametrize("use_async", [True, False])
+async def test_embedding_metric_score(
+    embedding_metric: metric.EmbeddingMetric,
+    use_async: bool,  # noqa: FBT001
+) -> None:
     """Test the embedding metric score."""
-    result = embedding_metric.score(
-        first_response="Hello, world!",
-        second_response="Hello, world!",
-    )
+    if use_async:
+        result = await embedding_metric.ascore(
+            first_response="Hello, world!",
+            second_response="Hello, world!",
+        )
+    else:
+        result = embedding_metric.score(
+            first_response="Hello, world!",
+            second_response="Hello, world!",
+        )
     assert math.isclose(result.value, 1.0)
 
 
-def test_statement_metric() -> None:
-    """Tests the statement metric happy path."""
+@pytest.mark.asyncio
+@pytest.mark.parametrize("use_async", [True, False])
+async def test_statement_metric_strict(use_async: bool) -> None:  # noqa: FBT001
+    """Tests the statement metric async happy path."""
     statements = ["This text is in French."]
     input_text = "An input text."
     output_text = "Oui, ce texte est en français."
     statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
 
-    result = statement_metric.score(input=input_text, output=output_text)
+    if use_async:
+        result = await statement_metric.ascore(
+            input=input_text, output=output_text, strict=True
+        )
+    else:
+        result = statement_metric.score(
+            input=input_text, output=output_text, strict=True
+        )
 
     assert result.name == "Statement Model"
     assert result.value == 1
 
 
-def test_statement_metric_fallback_not_strict(
-    caplog: pytest_logging.LogCaptureFixture, mocker: pytest_mock.MockerFixture
+@pytest.mark.asyncio
+@pytest.mark.parametrize("use_async", [True, False])
+async def test_statement_metric_fallback_not_strict(
+    caplog: pytest_logging.LogCaptureFixture,
+    mocker: pytest_mock.MockerFixture,
+    use_async: bool,  # noqa: FBT001
 ) -> None:
     """Tests the fallback for non-strict models works."""
     call_count = 0
@@ -126,15 +150,24 @@ def test_statement_metric_fallback_not_strict(
             raise litellm.BadRequestError(msg, "", "")
         return '[{"conclusion": true}]'
 
-    spy = mocker.patch.object(
-        MockOpikModel, "agenerate_string", side_effect=side_effect
-    )
+    if use_async:
+        spy = mocker.patch.object(
+            MockOpikModel, "agenerate_string", side_effect=side_effect
+        )
+    else:
+        spy = mocker.patch.object(
+            MockOpikModel, "generate_string", side_effect=side_effect
+        )
+
     statements = ["This text is in French."]
     input_text = "An input text."
     output_text = "Oui, ce texte est en français."
     statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
 
-    result = statement_metric.score(input=input_text, output=output_text)
+    if use_async:
+        result = await statement_metric.ascore(input=input_text, output=output_text)
+    else:
+        result = statement_metric.score(input=input_text, output=output_text)
 
     assert result.name == "Statement Model"
     assert result.value == 1
@@ -143,31 +176,59 @@ def test_statement_metric_fallback_not_strict(
 
 
 @pytest.mark.asyncio
-async def test_async_statement_metric() -> None:
-    """Tests the statement metric async happy path."""
+@pytest.mark.parametrize("use_async", [True, False])
+async def test_statement_metric_fallback_reraise(
+    mocker: pytest_mock.MockerFixture,
+    use_async: bool,  # noqa: FBT001
+) -> None:
+    """Tests the fallback for non-strict models works."""
+
+    def raise_error(*_args: Any, **_kwargs: Any) -> str:  # noqa: ANN401
+        """Raise an error only on the first (strict) attempt."""
+        msg = "Invalid schema for response_format"
+        raise litellm.BadRequestError(msg, "", "")
+
+    if use_async:
+        spy = mocker.patch.object(
+            MockOpikModel, "agenerate_string", side_effect=raise_error
+        )
+    else:
+        spy = mocker.patch.object(
+            MockOpikModel, "generate_string", side_effect=raise_error
+        )
     statements = ["This text is in French."]
-    input_text = "An input text."
-    output_text = "Oui, ce texte est en français."
+
     statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
+    with pytest.raises(litellm.BadRequestError):  # noqa: PT012
+        if use_async:
+            await statement_metric.ascore(input="", output="")
+        else:
+            statement_metric.score(input="", output="")
 
-    result = await statement_metric.ascore(input=input_text, output=output_text)
-
-    assert result.name == "Statement Model"
-    assert result.value == 1
+    assert spy.call_count == 2  # noqa: PLR2004
 
 
-def test_preference_metric() -> None:
+@pytest.mark.asyncio
+@pytest.mark.parametrize("use_async", [True, False])
+async def test_preference_metric(use_async: bool) -> None:  # noqa: FBT001
     """Tests the preference metric."""
     initial_prompt = "Explain quantum computing."
     first_response = "Quantum computers use qubits."
     second_response = "A detailed explanation of quantum superposition..."
     preference_metric = metric.PreferenceMetric(MockOpikModel())
 
-    result = preference_metric.score(
-        initial_prompt=initial_prompt,
-        first_response=first_response,
-        second_response=second_response,
-    )
+    if use_async:
+        result = await preference_metric.ascore(
+            initial_prompt=initial_prompt,
+            first_response=first_response,
+            second_response=second_response,
+        )
+    else:
+        result = preference_metric.score(
+            initial_prompt=initial_prompt,
+            first_response=first_response,
+            second_response=second_response,
+        )
 
     assert result.name == "Preference Model"
     assert "more detailed" in result.reason.lower()
