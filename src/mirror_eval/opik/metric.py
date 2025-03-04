@@ -316,7 +316,8 @@ class LlmStatementMetric(base_metric.BaseMetric):
             except litellm.BadRequestError as exc_info:
                 if "Invalid schema for response_format" in str(exc_info):
                     logger.warning(
-                        "Could not run this model with strict properties. Retrying without...",
+                        "Could not run this model with strict properties. "
+                        "Retrying without...",
                         exc_info=exc_info,
                     )
                     model_output = await self._model.agenerate_string(
