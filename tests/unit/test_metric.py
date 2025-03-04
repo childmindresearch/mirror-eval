@@ -115,16 +115,12 @@ async def test_statement_metric_strict(use_async: bool) -> None:  # noqa: FBT001
     mock_model = MockOpikModel(
         output=' "", "conclusion": true}]'
     )  # Accounts for JSON preamble included in the scoring function.
-    statement_metric = metric.LlmStatementMetric(statements, mock_model)
+    statement_metric = metric.LlmStatementMetric(statements, mock_model, strict=True)
 
     if use_async:
-        result = await statement_metric.ascore(
-            input=input_text, output=output_text, strict=True
-        )
+        result = await statement_metric.ascore(input=input_text, output=output_text)
     else:
-        result = statement_metric.score(
-            input=input_text, output=output_text, strict=True
-        )
+        result = statement_metric.score(input=input_text, output=output_text)
 
     assert result.name == "Statement Model"
     assert result.value == 1

@@ -236,6 +236,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         name: str = "Statement Model",
         *,
         track: bool = True,
+        strict: bool | None = None,
     ) -> None:
         """Initialize the query metric.
 
@@ -243,6 +244,9 @@ class LlmStatementMetric(base_metric.BaseMetric):
             statements: The statements to evaluate.
             model: The model to use in metric computation.
             name: The name of the metric.
+            strict: Whether to place regex restrictions on the output. Not
+                all models support this. If None (default), will try strict
+                first and fallback to non-strict on failure.
             track: Whether to track the metric. Defaults to True.
         """
         super().__init__(name=name, track=track)
@@ -250,6 +254,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         self._statements_tracked = False
         self._name = name
         self._preamble = '[{\n    "statement": '
+        self._strict = strict
 
         if isinstance(model, base_model.OpikBaseModel):
             self._model = model
@@ -269,8 +274,6 @@ class LlmStatementMetric(base_metric.BaseMetric):
         self,
         input: str,  # noqa: A002
         output: str,
-        *,
-        strict: bool | None = None,
         **_ignored_kwargs: Any,  # noqa: ANN401
     ) -> score_result.ScoreResult:
         """Calculate score.
@@ -278,9 +281,6 @@ class LlmStatementMetric(base_metric.BaseMetric):
         Args:
             input: The original input/question.
             output: The LLM's output to evaluate.
-            strict: Whether to place regex restrictions on the output. Not
-                all models support this. If None (default), will try strict
-                first and fallback to non-strict on failure.
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
@@ -290,7 +290,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
             self._track_statements(self._statements)
 
         prompt = self._get_prompt(input, output) + self._preamble
-        if strict is None:
+        if self._strict is None:
             try:
                 model_output = self._model.generate_string(
                     input=prompt,
@@ -312,7 +312,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         else:
             model_output = self._model.generate_string(
                 input=prompt,
-                response_format=self._get_response_model(strict=strict),
+                response_format=self._get_response_model(strict=self._strict),
             )
         return self._parse_model_output(model_output)
 
@@ -320,8 +320,6 @@ class LlmStatementMetric(base_metric.BaseMetric):
         self,
         input: str,  # noqa: A002
         output: str,
-        *,
-        strict: bool | None = None,
         **_ignored_kwargs: Any,  # noqa: ANN401
     ) -> score_result.ScoreResult:
         """Calculate the score for the given input and output.
@@ -329,9 +327,6 @@ class LlmStatementMetric(base_metric.BaseMetric):
         Args:
             input: The original input/question.
             output: The LLM's output to evaluate.
-            strict: Whether to place regex restrictions on the output. Not
-                all models support this. If None (default), will try strict
-                first and fallback to non-strict on failure.
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
@@ -341,7 +336,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
             self._track_statements(self._statements)
 
         prompt = self._get_prompt(input, output) + "\n\n" + self._preamble
-        if strict is None:
+        if self._strict is None:
             try:
                 model_output = await self._model.agenerate_string(
                     input=prompt,
@@ -363,7 +358,7 @@ class LlmStatementMetric(base_metric.BaseMetric):
         else:
             model_output = await self._model.agenerate_string(
                 input=prompt,
-                response_format=self._get_response_model(strict=strict),
+                response_format=self._get_response_model(strict=self._strict),
             )
         return self._parse_model_output(model_output)
 
