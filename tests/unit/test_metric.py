@@ -4,8 +4,11 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
+import litellm
 import numpy as np
 import pytest
+import pytest_mock
+from _pytest import logging as pytest_logging
 from opik.evaluation.models import base_model
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -106,6 +109,37 @@ def test_statement_metric() -> None:
 
     assert result.name == "Statement Model"
     assert result.value == 1
+
+
+def test_statement_metric_fallback_not_strict(
+    caplog: pytest_logging.LogCaptureFixture, mocker: pytest_mock.MockerFixture
+) -> None:
+    """Tests the fallback for non-strict models works."""
+    call_count = 0
+
+    def side_effect(*_args: Any, **_kwargs: Any) -> str:  # noqa: ANN401
+        """Raise an error only on the first (strict) attempt."""
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            msg = "Invalid schema for response_format ..."
+            raise litellm.BadRequestError(msg, "", "")
+        return '[{"conclusion": true}]'
+
+    spy = mocker.patch.object(
+        MockOpikModel, "agenerate_string", side_effect=side_effect
+    )
+    statements = ["This text is in French."]
+    input_text = "An input text."
+    output_text = "Oui, ce texte est en français."
+    statement_metric = metric.LlmStatementMetric(statements, MockOpikModel())
+
+    result = statement_metric.score(input=input_text, output=output_text)
+
+    assert result.name == "Statement Model"
+    assert result.value == 1
+    assert spy.call_count == 2  # noqa: PLR2004
+    assert "Could not run this model with strict properties." in caplog.text
 
 
 @pytest.mark.asyncio

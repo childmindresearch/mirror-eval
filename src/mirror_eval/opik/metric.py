@@ -1,10 +1,12 @@
 """Custom metrics for OPIK experiments."""
 
+import asyncio
 import json
 import re
 import statistics
 from typing import Any, Literal
 
+import litellm
 import numpy as np
 import opik
 import pydantic
@@ -12,10 +14,13 @@ from litellm.types.utils import TopLogprob
 from opik.evaluation.metrics import base_metric, score_result
 from opik.evaluation.models import base_model, models_factory
 
+from mirror_eval.core import config
 from mirror_eval.core.embedder import (
     Embedder,
 )
 from mirror_eval.opik import prompts, template
+
+logger = config.get_logger()
 
 
 class QueryResponse(pydantic.BaseModel):
@@ -276,19 +281,14 @@ class LlmStatementMetric(base_metric.BaseMetric):
         Returns:
             A ScoreResult with 1 if a match was found, 0 otherwise.
         """
-        if not self._statements_tracked:
-            self._track_statements(self._statements)
-
-        model_output = self._model.generate_string(
-            input=self._get_input(input, output),
-            response_format=self._get_response_model(),
-        )
-        return self._parse_model_output(model_output)
+        return asyncio.run(self.ascore(input, output))
 
     async def ascore(
         self,
         input: str,  # noqa: A002
         output: str,
+        *,
+        strict: bool | None = None,
         **_ignored_kwargs: Any,  # noqa: ANN401
     ) -> score_result.ScoreResult:
         """Calculate the score for the given input and output.
@@ -296,6 +296,9 @@ class LlmStatementMetric(base_metric.BaseMetric):
         Args:
             input: The original input/question.
             output: The LLM's output to evaluate.
+            strict: Whether to place regex restrictions on the output. Not
+                all models support this. If None (default), will try strict
+                first and fallback to non-strict on failure.
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
@@ -304,10 +307,29 @@ class LlmStatementMetric(base_metric.BaseMetric):
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
-        model_output = await self._model.agenerate_string(
-            input=self._get_input(input, output),
-            response_format=self._get_response_model(),
-        )
+        if strict is None:
+            try:
+                model_output = await self._model.agenerate_string(
+                    input=self._get_input(input, output),
+                    response_format=self._get_response_model(strict=True),
+                )
+            except litellm.BadRequestError as exc_info:
+                if "Invalid schema for response_format" in str(exc_info):
+                    logger.warning(
+                        "Could not run this model with strict properties. Retrying without...",
+                        exc_info=exc_info,
+                    )
+                    model_output = await self._model.agenerate_string(
+                        input=self._get_input(input, output),
+                        response_format=self._get_response_model(strict=False),
+                    )
+                else:
+                    raise
+        else:
+            model_output = await self._model.agenerate_string(
+                input=self._get_input(input, output),
+                response_format=self._get_response_model(strict=strict),
+            )
         return self._parse_model_output(model_output)
 
     def _get_input(self, input: str, output: str) -> str:  # noqa: A002
@@ -321,11 +343,15 @@ class LlmStatementMetric(base_metric.BaseMetric):
             input=input, output=output, statements=statement_prompt
         )
 
-    def _get_response_model(self) -> object:
+    def _get_response_model(self, *, strict: bool = True) -> object:
         """Creates a response model from the statements.
 
         This must be done dynamically to ensure that the 'statement'
         property is restricted to a copy of the input.
+
+        Args:
+            strict: Whether to add the pattern and min_length arguments
+                to the JSON schema. Not all models support this
 
         Returns:
             The response model.
@@ -335,8 +361,16 @@ class LlmStatementMetric(base_metric.BaseMetric):
             statement_pattern = "^" + statement + "$"
 
             class Statement(pydantic.BaseModel):
-                statement: str = pydantic.Field(..., pattern=statement_pattern)
-                evaluation: str = pydantic.Field(..., min_length=20)
+                statement: str = (
+                    pydantic.Field(..., pattern=statement_pattern)
+                    if strict
+                    else pydantic.Field(...)
+                )
+                evaluation: str = (
+                    pydantic.Field(..., min_length=20)
+                    if strict
+                    else pydantic.Field(...)
+                )
                 conclusion: bool
 
             statement_models.append(Statement)
