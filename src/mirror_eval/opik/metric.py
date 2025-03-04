@@ -5,7 +5,6 @@ import re
 import statistics
 from typing import Any, Literal
 
-import litellm
 import numpy as np
 import opik
 import pydantic
@@ -34,6 +33,20 @@ class PreferenceResponse(pydantic.BaseModel):
 
     response: int
     reason: str
+
+
+class Statement(pydantic.BaseModel):
+    """A single statement used in the StatementResponse."""
+
+    statement: str
+    evaluation: str
+    conclusion: bool
+
+
+class StatementResponse(pydantic.BaseModel):
+    """The response model for the statement verification metric."""
+
+    statements: list[Statement]
 
 
 class QueryMetric(base_metric.BaseMetric):
@@ -236,7 +249,6 @@ class LlmStatementMetric(base_metric.BaseMetric):
         name: str = "Statement Model",
         *,
         track: bool = True,
-        strict: bool | None = None,
     ) -> None:
         """Initialize the query metric.
 
@@ -244,17 +256,12 @@ class LlmStatementMetric(base_metric.BaseMetric):
             statements: The statements to evaluate.
             model: The model to use in metric computation.
             name: The name of the metric.
-            strict: Whether to place regex restrictions on the output. Not
-                all models support this. If None (default), will try strict
-                first and fallback to non-strict on failure.
             track: Whether to track the metric. Defaults to True.
         """
         super().__init__(name=name, track=track)
         self._statements = statements
         self._statements_tracked = False
         self._name = name
-        self._preamble = '[{\n    "statement": '
-        self._strict = strict
 
         if isinstance(model, base_model.OpikBaseModel):
             self._model = model
@@ -289,31 +296,11 @@ class LlmStatementMetric(base_metric.BaseMetric):
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
-        prompt = self._get_prompt(input, output) + self._preamble
-        if self._strict is None:
-            try:
-                model_output = self._model.generate_string(
-                    input=prompt,
-                    response_format=self._get_response_model(strict=True),
-                )
-            except litellm.BadRequestError as exc_info:
-                if "Invalid schema for response_format" not in str(exc_info):
-                    raise
-                logger.warning(
-                    "Could not run this model with strict properties. "
-                    "Retrying without...",
-                    exc_info=exc_info,
-                )
-                model_output = self._model.generate_string(
-                    input=prompt,
-                    response_format=self._get_response_model(strict=False),
-                )
-
-        else:
-            model_output = self._model.generate_string(
-                input=prompt,
-                response_format=self._get_response_model(strict=self._strict),
-            )
+        prompt = self._get_prompt(input, output)
+        model_output = self._model.generate_string(
+            input=prompt,
+            response_format=StatementResponse,
+        )
         return self._parse_model_output(model_output)
 
     async def ascore(
@@ -335,31 +322,10 @@ class LlmStatementMetric(base_metric.BaseMetric):
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
-        prompt = self._get_prompt(input, output) + "\n\n" + self._preamble
-        if self._strict is None:
-            try:
-                model_output = await self._model.agenerate_string(
-                    input=prompt,
-                    response_format=self._get_response_model(strict=True),
-                )
-            except litellm.BadRequestError as exc_info:
-                if "Invalid schema for response_format" in str(exc_info):
-                    logger.warning(
-                        "Could not run this model with strict properties. "
-                        "Retrying without...",
-                        exc_info=exc_info,
-                    )
-                    model_output = await self._model.agenerate_string(
-                        input=prompt,
-                        response_format=self._get_response_model(strict=False),
-                    )
-                else:
-                    raise
-        else:
-            model_output = await self._model.agenerate_string(
-                input=prompt,
-                response_format=self._get_response_model(strict=self._strict),
-            )
+        prompt = self._get_prompt(input, output)
+        model_output = await self._model.agenerate_string(
+            input=prompt, response_format=StatementResponse
+        )
         return self._parse_model_output(model_output)
 
     def _get_prompt(self, input: str, output: str) -> str:  # noqa: A002
@@ -373,51 +339,16 @@ class LlmStatementMetric(base_metric.BaseMetric):
             input=input, output=output, statements=statement_prompt
         )
 
-    def _get_response_model(self, *, strict: bool = True) -> object:
-        """Creates a response model from the statements.
-
-        This must be done dynamically to ensure that the 'statement'
-        property is restricted to a copy of the input.
-
-        Args:
-            strict: Whether to add the pattern and min_length arguments
-                to the JSON schema. Not all models support this
-
-        Returns:
-            The response model.
-        """
-        statement_models = []
-        for statement in self._statements:
-            statement_pattern = "^" + statement + "$"
-
-            class Statement(pydantic.BaseModel):
-                statement: str = (
-                    pydantic.Field(..., pattern=statement_pattern)
-                    if strict
-                    else pydantic.Field(...)
-                )
-                evaluation: str = (
-                    pydantic.Field(..., min_length=20)
-                    if strict
-                    else pydantic.Field(...)
-                )
-                conclusion: bool
-
-            statement_models.append(Statement)
-
-        class StatementModel(pydantic.BaseModel):
-            statements: tuple[*statement_models]  # type: ignore[valid-type]
-
-        return StatementModel
-
     def _parse_model_output(self, content: str) -> score_result.ScoreResult:
         """Extracts the scores from the LLM response.
 
         Returns:
             A ScoreResults wherein the value is the average score.
         """
-        dict_content = json.loads(self._preamble + content)
-        score = statistics.mean(response["conclusion"] for response in dict_content)
+        dict_content = json.loads(content)
+        score = statistics.mean(
+            response["conclusion"] for response in dict_content["statements"]
+        )
         return score_result.ScoreResult(
             name=self._name,
             value=score,

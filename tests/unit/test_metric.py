@@ -4,11 +4,8 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
-import litellm
 import numpy as np
 import pytest
-import pytest_mock
-from _pytest import logging as pytest_logging
 from opik.evaluation.models import base_model
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -107,55 +104,12 @@ async def test_embedding_metric_score(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("use_async", [True, False])
-async def test_statement_metric_strict(use_async: bool) -> None:  # noqa: FBT001
+async def test_statement_metric(use_async: bool) -> None:  # noqa: FBT001
     """Tests the statement metric async happy path."""
     statements = ["This text is in French."]
     input_text = "An input text."
     output_text = "Oui, ce texte est en français."
-    mock_model = MockOpikModel(
-        output=' "", "conclusion": true}]'
-    )  # Accounts for JSON preamble included in the scoring function.
-    statement_metric = metric.LlmStatementMetric(statements, mock_model, strict=True)
-
-    if use_async:
-        result = await statement_metric.ascore(input=input_text, output=output_text)
-    else:
-        result = statement_metric.score(input=input_text, output=output_text)
-
-    assert result.name == "Statement Model"
-    assert result.value == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("use_async", [True, False])
-async def test_statement_metric_fallback_happy_path(
-    caplog: pytest_logging.LogCaptureFixture,
-    mocker: pytest_mock.MockerFixture,
-    use_async: bool,  # noqa: FBT001
-) -> None:
-    """Tests the fallback for non-strict models works."""
-    call_count = 0
-
-    def side_effect(*_args: Any, **_kwargs: Any) -> str:  # noqa: ANN401
-        """Raise an error only on the first (strict) attempt."""
-        nonlocal call_count
-        call_count += 1
-        if call_count == 1:
-            msg = "Invalid schema for response_format ..."
-            raise litellm.BadRequestError(msg, "", "")
-        # Output accounts for JSON preamble included in the scoring function.
-        return ' "responses statement", "conclusion": true}]'
-
-    spy = mocker.patch.object(
-        MockOpikModel,
-        attribute="agenerate_string" if use_async else "generate_string",
-        side_effect=side_effect,
-    )
-
-    statements = ["This text is in French."]
-    input_text = "An input text."
-    output_text = "Oui, ce texte est en français."
-    mock_model = MockOpikModel("")  # Output is mocked in side_effect
+    mock_model = MockOpikModel(output='{"statements": [{"conclusion": true}]}')
     statement_metric = metric.LlmStatementMetric(statements, mock_model)
 
     if use_async:
@@ -165,44 +119,6 @@ async def test_statement_metric_fallback_happy_path(
 
     assert result.name == "Statement Model"
     assert result.value == 1
-    assert spy.call_count == 2  # noqa: PLR2004
-    assert "Could not run this model with strict properties." in caplog.text
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("use_async", [True, False])
-async def test_statement_metric_fallback_reraise(
-    mocker: pytest_mock.MockerFixture,
-    use_async: bool,  # noqa: FBT001
-) -> None:
-    """Tests the fallback for non-strict models works."""
-
-    def raise_error(*_args: Any, **_kwargs: Any) -> str:  # noqa: ANN401
-        """Raise an error only on the first (strict) attempt."""
-        msg = "Invalid schema for response_format"
-        raise litellm.BadRequestError(msg, "", "")
-
-    if use_async:
-        spy = mocker.patch.object(
-            MockOpikModel, "agenerate_string", side_effect=raise_error
-        )
-    else:
-        spy = mocker.patch.object(
-            MockOpikModel, "generate_string", side_effect=raise_error
-        )
-    statements = ["This text is in French."]
-    mock_model = MockOpikModel(
-        output=' "", "conclusion": true}]'
-    )  # Accounts for JSON preamble included in the scoring function.
-    statement_metric = metric.LlmStatementMetric(statements, mock_model)
-
-    with pytest.raises(litellm.BadRequestError):  # noqa: PT012
-        if use_async:
-            await statement_metric.ascore(input="", output="")
-        else:
-            statement_metric.score(input="", output="")
-
-    assert spy.call_count == 2  # noqa: PLR2004
 
 
 @pytest.mark.asyncio
