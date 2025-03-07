@@ -30,7 +30,7 @@ def get_settings() -> Settings:
 
 def get_logger() -> logging.Logger:
     """Gets the ctk-functions logger."""
-    logger = logging.getLogger("ctk-functions")
+    logger = logging.getLogger("mirror-eval")
     if logger.hasHandlers():
         return logger
 

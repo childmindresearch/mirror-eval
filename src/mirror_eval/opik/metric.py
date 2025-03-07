@@ -12,10 +12,13 @@ from litellm.types.utils import TopLogprob
 from opik.evaluation.metrics import base_metric, score_result
 from opik.evaluation.models import base_model, models_factory
 
+from mirror_eval.core import config
 from mirror_eval.core.embedder import (
     Embedder,
 )
 from mirror_eval.opik import prompts, template
+
+logger = config.get_logger()
 
 
 class QueryResponse(pydantic.BaseModel):
@@ -30,6 +33,20 @@ class PreferenceResponse(pydantic.BaseModel):
 
     response: int
     reason: str
+
+
+class Statement(pydantic.BaseModel):
+    """A single statement used in the StatementResponse."""
+
+    statement: str
+    evaluation: str
+    conclusion: bool
+
+
+class StatementResponse(pydantic.BaseModel):
+    """The response model for the statement verification metric."""
+
+    statements: list[Statement]
 
 
 class QueryMetric(base_metric.BaseMetric):
@@ -274,14 +291,15 @@ class LlmStatementMetric(base_metric.BaseMetric):
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
-            A ScoreResult with 1 if a match was found, 0 otherwise.
+            A ScoreResult with the average of the statements' truthfulness.
         """
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
+        prompt = self._get_prompt(input, output)
         model_output = self._model.generate_string(
-            input=self._get_input(input, output),
-            response_format=self._get_response_model(),
+            input=prompt,
+            response_format=StatementResponse,
         )
         return self._parse_model_output(model_output)
 
@@ -299,18 +317,18 @@ class LlmStatementMetric(base_metric.BaseMetric):
             **_ignored_kwargs: Additional keyword arguments that are ignored.
 
         Returns:
-            A ScoreResult with 1 if a match was found, 0 otherwise.
+            A ScoreResult with the average of the statements' truthfulness.
         """
         if not self._statements_tracked:
             self._track_statements(self._statements)
 
+        prompt = self._get_prompt(input, output)
         model_output = await self._model.agenerate_string(
-            input=self._get_input(input, output),
-            response_format=self._get_response_model(),
+            input=prompt, response_format=StatementResponse
         )
         return self._parse_model_output(model_output)
 
-    def _get_input(self, input: str, output: str) -> str:  # noqa: A002
+    def _get_prompt(self, input: str, output: str) -> str:  # noqa: A002
         """Gets the input prompt for scoring.
 
         Returns:
@@ -321,42 +339,21 @@ class LlmStatementMetric(base_metric.BaseMetric):
             input=input, output=output, statements=statement_prompt
         )
 
-    def _get_response_model(self) -> object:
-        """Creates a response model from the statements.
-
-        This must be done dynamically to ensure that the 'statement'
-        property is restricted to a copy of the input.
-
-        Returns:
-            The response model.
-        """
-        statement_models = []
-        for statement in self._statements:
-            statement_pattern = "^" + statement + "$"
-
-            class Statement(pydantic.BaseModel):
-                statement: str = pydantic.Field(..., pattern=statement_pattern)
-                evaluation: str = pydantic.Field(..., min_length=20)
-                conclusion: bool
-
-            statement_models.append(Statement)
-
-        class StatementModel(pydantic.BaseModel):
-            statements: tuple[*statement_models]  # type: ignore[valid-type]
-
-        return StatementModel
-
     def _parse_model_output(self, content: str) -> score_result.ScoreResult:
         """Extracts the scores from the LLM response.
 
         Returns:
             A ScoreResults wherein the value is the average score.
         """
-        dict_content = json.loads(content)
-        score = statistics.mean(response["conclusion"] for response in dict_content)
+        response = StatementResponse.model_validate_json(content)
+        score = statistics.mean(
+            statement.conclusion for statement in response.statements
+        )
+        reason = response.model_dump_json(indent=4)
         return score_result.ScoreResult(
             name=self._name,
             value=score,
+            reason=reason,
         )
 
 
