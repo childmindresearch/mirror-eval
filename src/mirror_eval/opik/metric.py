@@ -345,21 +345,11 @@ class LlmStatementMetric(base_metric.BaseMetric):
         Returns:
             A ScoreResults wherein the value is the average score.
         """
-
-        def response_to_string(statement: Statement) -> str:
-            return (
-                f"Statement: {statement.statement}"
-                f"\nEvaluation: {statement.evaluation}"
-                f"\nConclusion: {statement.conclusion}"
-            )
-
         response = StatementResponse.model_validate_json(content)
         score = statistics.mean(
             statement.conclusion for statement in response.statements
         )
-        reason = "\n\n".join(
-            response_to_string(statement) for statement in response.statements
-        )
+        reason = response.model_dump_json(indent=4)
         return score_result.ScoreResult(
             name=self._name,
             value=score,

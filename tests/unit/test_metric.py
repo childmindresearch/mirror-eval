@@ -109,22 +109,16 @@ async def test_statement_metric(use_async: bool) -> None:  # noqa: FBT001
     statements = ["This text is in French."]
     input_text = "An input text."
     output_text = "Oui, ce texte est en français."
-    mock_model = MockOpikModel(
-        output="""
-            {"statements":
-                [
-                    {
-                        "statement": "This is English.",
-                        "evaluation": "It really is.",
-                        "conclusion": true
-                    }
-                ]
-            }
-        """
-    )
-    expected_reason = (
-        "Statement: This is English.\nEvaluation: It really is.\nConclusion: True"
-    )
+    output = """{
+    "statements": [
+        {
+            "statement": "This is English.",
+            "evaluation": "It really is.",
+            "conclusion": true
+        }
+    ]
+}"""
+    mock_model = MockOpikModel(output=output)
 
     statement_metric = metric.LlmStatementMetric(statements, mock_model)
 
@@ -135,7 +129,9 @@ async def test_statement_metric(use_async: bool) -> None:  # noqa: FBT001
 
     assert result.name == "Statement Model"
     assert result.value == 1
-    assert result.reason == expected_reason
+    assert (
+        result.reason.lower() == output.lower()
+    )  # .lower() because JSON uses lowercase True.
 
 
 @pytest.mark.asyncio
