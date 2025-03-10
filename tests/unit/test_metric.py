@@ -177,3 +177,13 @@ def test_logprobs_get_final_score() -> None:
     normalized_probs = [prob / sum(total_probs) for prob in total_probs]
     value = 7 * normalized_probs[0] + 3 * normalized_probs[1]
     assert math.isclose(result, value)
+
+
+def test_languagetool_metric() -> None:
+    """Test the languagetool metric happy path."""
+    language_tool_metric = metric.LanguageToolMetric()
+
+    result = language_tool_metric.score("how are you?")
+
+    assert result.value == 1
+    assert result.reason == "This sentence does not start with an uppercase letter."

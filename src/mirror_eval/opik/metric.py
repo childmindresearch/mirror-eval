@@ -5,6 +5,7 @@ import re
 import statistics
 from typing import Any, Literal
 
+import language_tool_python
 import numpy as np
 import opik
 import pydantic
@@ -594,4 +595,45 @@ class LogprobsMetric(base_metric.BaseMetric):
             value=self._get_final_score(
                 response.choices[0].logprobs.content[0].top_logprobs,
             ),
+        )
+
+
+class LanguageToolMetric(base_metric.BaseMetric):
+    """Metric that penalizes bad grammar.
+
+    Scores by number of matches found by LanguageTool.
+    """
+
+    def __init__(
+        self,
+        name: str = "LanguageTool Match Count",
+        language: str = "en-US",
+        *,
+        track: bool = True,
+    ) -> None:
+        """Initialize the LanguageTool Metric.
+
+        Args:
+            name: The name of the metric.
+            language: The language to correct.
+            track: Whether to track the metric.
+        """
+        super().__init__(name=name, track=track)
+        self._tool = language_tool_python.LanguageTool(language)
+
+    def score(self, output: str, **_unused_kwargs: Any) -> score_result.ScoreResult:  # noqa: ANN401
+        """Scores the output.
+
+        Args:
+            output: The output to score.
+
+        Returns:
+            A ScoreResult with the count of LanguageTool matches found.
+        """
+        matches = self._tool.check(output)
+        reason = "\n".join(match.message for match in matches)
+        return score_result.ScoreResult(
+            name=self.name,
+            value=len(matches),
+            reason=reason,
         )
